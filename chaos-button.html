@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Chaos Button — DON'T PRESS THIS BUTTON</title>
+<style>
+  :root{
+    --bg:#0f172a;
+    --card:#0b1220;
+    --accent:#ff5c8a;
+    --muted:#9aa7bf;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(135deg,#071027 0%, #0f294b 100%);overflow:hidden;color:#e6eef8}
+  .stage{
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    perspective:1000px;
+  }
+  .card {
+    width:360px;
+    max-width:90%;
+    text-align:center;
+    padding:34px;
+    border-radius:18px;
+    background:radial-gradient(circle at 10% 10%, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), rgba(255,255,255,0.02);
+    box-shadow: 0 12px 40px rgba(2,6,23,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+    transform-origin:center;
+  }
+  h1{font-size:20px;margin:0 0 8px;color:whitesmoke}
+  p.muted{color:var(--muted);font-size:13px;margin:0 0 18px}
+  #chaosBtn{
+    --size:160px;
+    width:var(--size);
+    height:var(--size);
+    border-radius:999px;
+    background:linear-gradient(180deg,#ff6b9b,#ff3a6e);
+    border:6px solid rgba(255,255,255,0.08);
+    color:white;
+    font-weight:700;
+    font-size:18px;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow: 0 18px 40px rgba(255,90,130,0.12), 0 6px 18px rgba(0,0,0,0.6);
+    transition:transform .12s ease, box-shadow .12s ease;
+    user-select:none;
+  }
+  #chaosBtn:active{transform:scale(.96)}
+  .meta{margin-top:12px;color:var(--muted);font-size:14px;display:flex;gap:12px;justify-content:center;align-items:center}
+  .counter{background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:10px;font-weight:600}
+  .floatingText {
+    position:fixed; left:50%; transform:translateX(-50%); top:10%;
+    pointer-events:none; font-weight:700; font-size:20px; text-shadow:0 6px 18px rgba(0,0,0,0.6);
+  }
+
+  /* emoji particle */
+  .emoji {
+    position:fixed;
+    will-change: transform, opacity;
+    font-size:28px;
+    pointer-events:none;
+    user-select:none;
+    transform-origin:center;
+  }
+
+  /* quick keyframe for float */
+  @keyframes floatUp {
+    0% { transform: translateY(0) scale(1); opacity:1; }
+    100% { transform: translateY(-300px) scale(1.4); opacity:0; }
+  }
+
+  /* screen shake helper */
+  .shake { animation: shake .8s ease both; }
+  @keyframes shake {
+    0%{ transform: translate(0,0) rotate(0) }
+    20%{ transform: translate(-8px,6px) rotate(-4deg) }
+    40%{ transform: translate(8px,-6px) rotate(4deg) }
+    60%{ transform: translate(-6px,6px) rotate(-2deg) }
+    80%{ transform: translate(6px,-6px) rotate(2deg) }
+    100%{ transform: translate(0,0) rotate(0) }
+  }
+
+  /* flies/rotate full spin */
+  .spin360 { animation: spin360 1s linear both; }
+  @keyframes spin360 {
+    0%{ transform: rotate(0deg); }
+    100%{ transform: rotate(360deg); }
+  }
+
+  /* temporary cursor-change class */
+  .weird-cursor * { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><text y="20" font-size="18">🤡</text></svg>') 8 8, auto !important; }
+
+  /* hide cursor */
+  .hide-cursor * { cursor: none !important; }
+
+  /* flashing background */
+  .flash-bg { animation: flashBg .6s linear 3; }
+  @keyframes flashBg {
+    0%{ filter:brightness(1) }
+    50%{ filter:brightness(2) hue-rotate(30deg) }
+    100%{ filter:brightness(1) }
+  }
+
+  /* popup message style */
+  .popup {
+    position:fixed;
+    left:50%; top:50%;
+    transform:translate(-50%,-50%) scale(.96);
+    background:rgba(6,10,24,0.9);
+    color:white;
+    padding:18px 22px;
+    border-radius:12px;
+    box-shadow:0 18px 40px rgba(0,0,0,0.7);
+    font-weight:700;
+    opacity:0;
+    transition:all .25s ease;
+    pointer-events:none;
+    z-index:9999;
+  }
+  .popup.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="card" id="card">
+    <h1>DON'T PRESS THIS BUTTON</h1>
+    <p class="muted">A single click unleashes unpredictable (and slightly insane) chaos. Try me.</p>
+
+    <button id="chaosBtn" aria-label="Chaos Button">DON'T PRESS THIS BUTTON</button>
+
+    <div class="meta">
+      <div class="counter">Chaos count: <span id="count">0</span></div>
+      <div class="muted" id="lastEvent">Last: —</div>
+    </div>
+  </div>
+</div>
+
+<div id="floatingText" class="floatingText" aria-hidden="true"></div>
+<div id="popup" class="popup" role="alert" aria-hidden="true"></div>
+
+<script>
+/* ------------- Basic utilities and state -------------- */
+const chaosBtn = document.getElementById('chaosBtn');
+const countEl = document.getElementById('count');
+const lastEventEl = document.getElementById('lastEvent');
+const stage = document.getElementById('stage');
+const body = document.body;
+const popup = document.getElementById('popup');
+const floatingText = document.getElementById('floatingText');
+
+let count = 0;
+let eventCooldown = false; // small guard so events don't overlap weirdly
+
+const phrases = [
+  "Are you proud of this?",
+  "Why did you do that?",
+  "You’ve unleashed chaos.",
+  "Oops. My bad.",
+  "Hope you like mayhem.",
+  "The universe judges you.",
+  "Again? Seriously?"
+];
+
+const emojiPools = [
+  ["💥","🤡","🤯","😈","👻","🔥"],
+  ["😂","🤣","😹","🤪","🙃","😵‍💫"],
+  ["🍕","🍔","🍟","🌭","🍩","🍪"],
+  ["🌈","✨","⭐","💫","🌟","🪄"]
+];
+
+/* ---------- Audio helpers using WebAudio & speechSynthesis ---------- */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = AudioCtx ? new AudioCtx() : null;
+
+function playTone(type='sine', freq=440, duration=0.18, vol=0.15){
+  if(!audioCtx) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.value = vol;
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime + duration);
+}
+
+/* small "voice" using speechSynthesis if available */
+function speak(text){
+  if(!window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.05;
+  u.pitch = Math.random() * 0.6 + 0.6;
+  u.lang = 'en-US';
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
+/* ---------- particle / emoji spawn ---------- */
+function spawnEmojis(poolIndex = 0, count=12){
+  const pool = emojiPools[poolIndex % emojiPools.length];
+  for(let i=0;i<count;i++){
+    const el = document.createElement('div');
+    el.className = 'emoji';
+    el.style.left = (50 + (Math.random()*140 - 70)) + '%';
+    el.style.top = (50 + (Math.random()*40 - 20)) + '%';
+    el.style.fontSize = (18 + Math.random()*36) + 'px';
+    el.style.opacity = 1;
+    el.textContent = pool[Math.floor(Math.random()*pool.length)];
+    document.body.appendChild(el);
+    const dx = (Math.random()*260 - 130);
+    const dy = -(120 + Math.random()*420);
+    const rot = (Math.random()*720 - 360);
+    el.animate([
+      { transform: `translate(0,0) rotate(0deg)`, opacity:1 },
+      { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity:0 }
+    ], {
+      duration: 700 + Math.random()*1200,
+      easing: "cubic-bezier(.2,.8,.2,1)",
+      fill: "forwards"
+    });
+    setTimeout(()=>el.remove(), 2200 + Math.random()*800);
+  }
+}
+
+/* ---------- text popups ---------- */
+function flashFloatingText(text, duration=1200){
+  floatingText.textContent = text;
+  floatingText.style.opacity = 1;
+  floatingText.animate([
+    { transform: 'translateX(-50%) translateY(0)', opacity:1 },
+    { transform: 'translateX(-50%) translateY(-40px)', opacity:0 }
+  ], { duration: duration, easing: 'ease-out', fill:'forwards' });
+}
+
+/* transient modal popup */
+function showPopup(text, ttl=1400){
+  popup.textContent = text;
+  popup.setAttribute('aria-hidden','false');
+  popup.classList.add('show');
+  setTimeout(()=> {
+    popup.classList.remove('show');
+    popup.setAttribute('aria-hidden','true');
+  }, ttl);
+}
+
+/* ---------- main chaos events ---------- */
+function playSoundEvent(){
+  // quick rim + click + voice
+  playTone('triangle', 200, .06, .12);
+  setTimeout(()=>playTone('sawtooth', 600, .12, .08), 70);
+  if(Math.random() < 0.6) speak(["Bruh","Noooo","Chaos!","Aaargh!"][Math.floor(Math.random()*4)]);
+}
+
+function spawnEmojiEvent(){
+  const poolIdx = Math.floor(Math.random()*emojiPools.length);
+  spawnEmojis(poolIdx, 14);
+}
+
+function rotateScreenEvent(){
+  // rotate the whole card + stage for a full loop
+  document.getElementById('card').classList.add('spin360');
+  body.classList.add('flash-bg');
+  setTimeout(()=> {
+    document.getElementById('card').classList.remove('spin360');
+    body.classList.remove('flash-bg');
+  }, 1100);
+}
+
+function shakeScreenEvent(){
+  body.classList.add('shake');
+  setTimeout(()=> body.classList.remove('shake'), 900);
+}
+
+function showRandomTextEvent(){
+  const phrase = phrases[Math.floor(Math.random()*phrases.length)];
+  flashFloatingText(phrase, 1400);
+}
+
+function changeBgEvent(){
+  const r = Math.floor(Math.random()*200)+20;
+  const g = Math.floor(Math.random()*200)+20;
+  const b = Math.floor(Math.random()*200)+20;
+  document.documentElement.style.setProperty('--bg', `rgb(${r},${g},${b})`);
+  body.animate([{filter:'hue-rotate(0deg)'},{filter:`hue-rotate(${Math.random()*360}deg)`}],{duration:700,fill:'forwards'});
+}
+
+function hideCursorEvent(){
+  body.classList.add('hide-cursor');
+  setTimeout(()=> body.classList.remove('hide-cursor'), 2500);
+}
+
+function weirdCursorEvent(){
+  body.classList.add('weird-cursor');
+  setTimeout(()=> body.classList.remove('weird-cursor'), 3500);
+}
+
+function confettiEvent(){
+  // simple confetti using emoji + quick spawn
+  spawnEmojis(Math.floor(Math.random()*emojiPools.length), 30);
+  playTone('square', 330, .08, .07);
+  setTimeout(()=>playTone('sine', 520, .05, .06), 80);
+}
+
+/* ---------- combined/compound events ---------- */
+const chaosEvents = [
+  {fn: playSoundEvent, name:"Sound Storm"},
+  {fn: spawnEmojiEvent, name:"Emoji Blast"},
+  {fn: rotateScreenEvent, name:"Spin-o-rama"},
+  {fn: shakeScreenEvent, name:"Screen Shake"},
+  {fn: showRandomTextEvent, name:"Sassy Text"},
+  {fn: changeBgEvent, name:"Color Burst"},
+  {fn: hideCursorEvent, name:"Cursor Vanish"},
+  {fn: weirdCursorEvent, name:"Weird Cursor"},
+  {fn: confettiEvent, name:"Confetti Chaos"},
+  // compound example
+  {fn: ()=>{ spawnEmojis(0,16); playTone('sawtooth', 420, .18, .12); flashFloatingText("You monster."); }, name:"Combo: Monster"},
+  {fn: ()=>{ spawnEmojis(2,22); body.classList.add('shake'); setTimeout(()=>body.classList.remove('shake'),900); speak("Try again"); }, name:"Combo: Try Again"}
+];
+
+/* ---------- click handler ---------- */
+function runRandomChaos(){
+  if(eventCooldown) return;
+  eventCooldown = true;
+  setTimeout(()=> eventCooldown = false, 120); // small throttle
+
+  count++;
+  countEl.textContent = count;
+
+  const choice = chaosEvents[Math.floor(Math.random()*chaosEvents.length)];
+  lastEventEl.textContent = `Last: ${choice.name}`;
+
+  // run chosen function safely
+  try {
+    choice.fn();
+  } catch(e){
+    console.error("Chaos failed:", e);
+  }
+
+  // occasional popup for drama
+  if(Math.random() < 0.22){
+    showPopup(phrases[Math.floor(Math.random()*phrases.length)], 1200);
+  }
+
+  // fun little autoplay tone
+  if(Math.random() < 0.3) playTone(['sine','square','sawtooth'][Math.floor(Math.random()*3)], 220 + Math.random()*600, .12, .09);
+
+  // small flash
+  body.classList.add('flash-bg');
+  setTimeout(()=> body.classList.remove('flash-bg'), 600 + Math.random()*300);
+}
+
+/* attach */
+chaosBtn.addEventListener('click', async (e) => {
+  // resume audio context on some browsers
+  if(audioCtx && audioCtx.state === 'suspended'){ try { await audioCtx.resume(); } catch(_){} }
+  runRandomChaos();
+});
+
+/* keyboard shortcut for testing: press spacebar */
+window.addEventListener('keydown', (ev)=>{
+  if(ev.code === 'Space'){ ev.preventDefault(); chaosBtn.classList.add('active'); runRandomChaos(); setTimeout(()=>chaosBtn.classList.remove('active'),120); }
+});
+
+/* small onboarding: floating instructions */
+setTimeout(()=>{ flashFloatingText("Press the button... if you dare.", 1800); }, 900);
+
+/* Accessibility: allow Enter/Space when focused */
+chaosBtn.addEventListener('keyup', (e) => { if(e.key === 'Enter'){ runRandomChaos(); } });
+
+</script>
+</body>
+</html>
