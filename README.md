@@ -1,5 +1,7 @@
 # Chaos Button 🎛️💥
 
+![Status](https://img.shields.io/badge/status-completed-1f6feb?style=flat-square)
+
 **DON'T PRESS THIS BUTTON** — every click unleashes unpredictable chaos.  
 A fun, addictive, and slightly insane single-button website made with HTML, CSS, and JavaScript.
 
